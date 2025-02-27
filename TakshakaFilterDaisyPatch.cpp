@@ -133,64 +133,68 @@ void updateCurrentCompSettingValue(){
 		default: break;
 	}
 }
+void handleCompSubMenuEncoderUp(){
+	switch( currentCompSetting ){
+		case COMP_ATTACK:
+			currentCompAttackIncrement++;
+			if( currentCompAttackIncrement > MAX_INCREMENT ) currentCompAttackIncrement = MAX_INCREMENT;
+			break;
+		case COMP_MAKEUP:
+			currentCompMakeupIncrement++;
+			if( currentCompMakeupIncrement > MAX_INCREMENT ) currentCompMakeupIncrement = MAX_INCREMENT;
+			break;
+		case COMP_RATIO:
+			currentCompRatioIncrement++;
+			if( currentCompRatioIncrement > MAX_INCREMENT ) currentCompRatioIncrement = MAX_INCREMENT;
+			break;
+		case COMP_RELEASE:
+			currentCompReleaseIncrement++;
+			if( currentCompReleaseIncrement > MAX_INCREMENT ) currentCompReleaseIncrement = MAX_INCREMENT;
+			break;
+		case COMP_THRESHOLD:
+			currentCompThresholdIncrement++;
+			if( currentCompThresholdIncrement > MAX_INCREMENT ) currentCompThresholdIncrement = MAX_INCREMENT;
+			break;
+		default: break;
+	}
+	updateCurrentCompSettingValue();
+}
+void handleCompSubMenuEncoderDown(){
+	switch( currentCompSetting ){
+		case COMP_ATTACK:
+			currentCompAttackIncrement--;
+			if( currentCompAttackIncrement < 1 ) currentCompAttackIncrement = 1;
+			break;
+		case COMP_MAKEUP:
+			currentCompMakeupIncrement--;
+			if( currentCompMakeupIncrement < 1 ) currentCompMakeupIncrement = 1;
+			break;
+		case COMP_RATIO:
+			currentCompRatioIncrement--;
+			if( currentCompRatioIncrement < 1 ) currentCompRatioIncrement = 1;
+			break;
+		case COMP_RELEASE:
+			currentCompReleaseIncrement--;
+			if( currentCompReleaseIncrement < 1 ) currentCompReleaseIncrement = 1;
+			break;
+		case COMP_THRESHOLD:
+			currentCompThresholdIncrement--;
+			if( currentCompThresholdIncrement < 1 ) currentCompThresholdIncrement = 1;
+			break;
+		default: break;
+	}
+	updateCurrentCompSettingValue();
+}
 void handleCompMenuEncoderUp() {
-	if( isCompSubmenu ){
-		switch( currentCompSetting ){
-			case COMP_ATTACK:
-				currentCompAttackIncrement++;
-				if( currentCompAttackIncrement > MAX_INCREMENT ) currentCompAttackIncrement = MAX_INCREMENT;
-				break;
-			case COMP_MAKEUP:
-				currentCompMakeupIncrement++;
-				if( currentCompMakeupIncrement > MAX_INCREMENT ) currentCompMakeupIncrement = MAX_INCREMENT;
-				break;
-			case COMP_RATIO:
-				currentCompRatioIncrement++;
-				if( currentCompRatioIncrement > MAX_INCREMENT ) currentCompRatioIncrement = MAX_INCREMENT;
-				break;
-			case COMP_RELEASE:
-				currentCompReleaseIncrement++;
-				if( currentCompReleaseIncrement > MAX_INCREMENT ) currentCompReleaseIncrement = MAX_INCREMENT;
-				break;
-			case COMP_THRESHOLD:
-				currentCompThresholdIncrement++;
-				if( currentCompThresholdIncrement > MAX_INCREMENT ) currentCompThresholdIncrement = MAX_INCREMENT;
-				break;
-			default: break;
-		}
-		updateCurrentCompSettingValue();
-	} else {
+	if( isCompSubmenu ) handleCompSubMenuEncoderUp();
+	else {
 		currentCompSetting++;
 		if( currentCompSetting >= COMP_SETTINGS_COUNT ) currentCompSetting = COMP_SETTINGS_COUNT - 1;
 	}
 }
 void handleCompMenuEncoderDown() {
-	if( isCompSubmenu ){
-		switch( currentCompSetting ){
-			case COMP_ATTACK:
-				currentCompAttackIncrement--;
-				if( currentCompAttackIncrement < 1 ) currentCompAttackIncrement = 1;
-				break;
-			case COMP_MAKEUP:
-				currentCompMakeupIncrement--;
-				if( currentCompMakeupIncrement < 1 ) currentCompMakeupIncrement = 1;
-				break;
-			case COMP_RATIO:
-				currentCompRatioIncrement--;
-				if( currentCompRatioIncrement < 1 ) currentCompRatioIncrement = 1;
-				break;
-			case COMP_RELEASE:
-				currentCompReleaseIncrement--;
-				if( currentCompReleaseIncrement < 1 ) currentCompReleaseIncrement = 1;
-				break;
-			case COMP_THRESHOLD:
-				currentCompThresholdIncrement--;
-				if( currentCompThresholdIncrement < 1 ) currentCompThresholdIncrement = 1;
-				break;
-			default: break;
-		}
-		updateCurrentCompSettingValue();
-	} else {
+	if( isCompSubmenu ) handleCompSubMenuEncoderDown();
+	else {
 		currentCompSetting--;
 		if( currentCompSetting < -1 ) currentCompSetting = -1;
 	}
@@ -231,7 +235,7 @@ void encoderDown(){
 			currentTopMenuSetting--;
 			if( currentTopMenuSetting <= MENU_TOP ) currentTopMenuSetting = MENU_VENOM;
 			break;
-			case MENU_VENOM:
+		case MENU_VENOM:
 			currentVenomIncrement--;
 			if( currentVenomIncrement < 1 ) currentVenomIncrement = 1;
 			updateVenomValue();
@@ -242,6 +246,8 @@ void encoderDown(){
 			break;
 		case MENU_COMP:
 			handleCompMenuEncoderDown();
+			break;
+		default: break;
 	}
 	updateDisplay = true;
 }
@@ -260,9 +266,7 @@ void encoderClick(){
 				if( currentCompSetting == -1 ){
 					currentMenu = MENU_TOP;
 					currentCompSetting = COMP_ATTACK;
-				} else {
-					isCompSubmenu = true;
-				}
+				} else isCompSubmenu = true; 
 			}
 			break;
 		default: break;
@@ -278,20 +282,8 @@ void handleEncoder(){
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size){
 	for (size_t i = 0; i < size; i++){
 		out[0][i] = currentFilterOrder == FILTER_ORDER_COMB_FIRST?
-			comp.Process(
-				ladder.Process( 
-					comb.Process( 
-						SoftClip( in[0][i] * ( 1.f + currentVenomValue ) ) 
-					) 
-				)
-			) : 
-			comb.Process( 
-				comp.Process(
-					ladder.Process( 
-						SoftClip( in[0][i] * ( 1.f + currentVenomValue ) )
-					)
-				)
-			);
+			comp.Process( ladder.Process( comb.Process( SoftClip( in[0][i] * ( 1.f + currentVenomValue ) ) ) ) ) : 
+			comb.Process( comp.Process( ladder.Process( SoftClip( in[0][i] * ( 1.f + currentVenomValue ) ) ) ) );
 		out[1][i] = 0.f;
 		out[2][i] = 0.f;
 		out[3][i] = 0.f;
