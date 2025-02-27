@@ -21,7 +21,11 @@
       "problemMatcher": [
         "$gcc"
       ],
-      "type": "shell"
+      "type": "shell",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
     },
     {
       "command": "make clean; make; make program-dfu",
@@ -64,10 +68,7 @@
         "$gcc"
       ],
       "type": "shell",
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      }
+      "group": "build"
     },
     {
       "command": "make program-dfu",
