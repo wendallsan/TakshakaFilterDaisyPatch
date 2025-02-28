@@ -39,7 +39,7 @@ float combBuffer[ COMB_BUFFER_SIZE ],
 	compReleaseMax = 10.f,
 	compThresholdMax = -80.f,
 	venomMin = 0.f,
-	venomMax = 80.f;
+	venomMax = 8.f;
 
 int currentMenu = MENU_TOP,
 	currentTopMenuSetting = MENU_VENOM,
@@ -280,10 +280,15 @@ void handleEncoder(){
 	if( hw.encoder.RisingEdge() ) encoderClick();
 }
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size){
-	for (size_t i = 0; i < size; i++){
-		out[0][i] = currentFilterOrder == FILTER_ORDER_COMB_FIRST?
-			comp.Process( ladder.Process( comb.Process( SoftClip( in[0][i] * ( 1.f + currentVenomValue ) ) ) ) ) : 
-			comb.Process( comp.Process( ladder.Process( SoftClip( in[0][i] * ( 1.f + currentVenomValue ) ) ) ) );
+	for (size_t i = 0; i < size; i++){		
+		// try running either configuration through the compressor as a final stage
+		out[0][i] = comp.Process(
+			FILTER_ORDER_COMB_FIRST?
+			ladder.Process( comb.Process( SoftClip( in[0][i] * ( 1.f + currentVenomValue ) ) ) ) : 
+			comb.Process( ladder.Process( SoftClip( in[0][i] * ( 1.f + currentVenomValue ) ) ) )
+		);
+		// this version places the compressor after the ladder in both configurations
+		// FILTER_ORDER_COMB_FIRST? comp.Process( ladder.Process( comb.Process( SoftClip( in[0][i] * ( 1.f + currentVenomValue ) ) ) ) ) : comp.Process( comb.Process( ladder.Process( SoftClip( in[0][i] * ( 1.f + currentVenomValue ) ) ) ) );
 		out[1][i] = 0.f;
 		out[2][i] = 0.f;
 		out[3][i] = 0.f;
@@ -303,8 +308,8 @@ void initializeComp(){
 }
 void initializeKnobs(){
 	growlKnob.Init( hw.controls[0], 20.f, 40000.f, Parameter::LOGARITHMIC );
-	howlKnob.Init( hw.controls[2], 0.f, 6000.f, Parameter::LOGARITHMIC );
-	resKnob.Init( hw.controls[1], 0.f, 0.9f, Parameter::LINEAR );
+	howlKnob.Init( hw.controls[2], 200.f, 4000.f, Parameter::LOGARITHMIC );
+	resKnob.Init( hw.controls[1], 0.f, 0.99f, Parameter::LINEAR );
 	fdbkKnob.Init( hw.controls[3], 0.f, 0.99f, Parameter::EXPONENTIAL );
 }
 void updateOledTopLeft(){
@@ -345,7 +350,6 @@ void updateOledTopLeft(){
 			str = "        ";
 			break;
 	}
-
 	hw.display.SetCursor( 0, 0 );
 	hw.display.WriteString( str, Font_7x10, true );
 }
@@ -356,7 +360,7 @@ void updateOledTopRight(){
 			str = "   MENU:";
 			break;
 		case MENU_VENOM:
-			str = " 0-8.0";
+			str = "     0-8";
 			break;
 		case MENU_COMP:
 			if( isCompSubmenu ){				
@@ -411,15 +415,15 @@ void updateOledBottomRight(){
 		case MENU_VENOM:
 			str.Clear();
 			str.Append( "   " );
-			str.AppendFloat(currentVenomValue, 2, false, true );
+			str.AppendFloat( currentVenomValue );
 			break;
 		case MENU_FILTER_ORDER:
 			switch( currentFilterOrder ){
 				case FILTER_ORDER_LADDER_FIRST:
-					str = "LAD->LPF";
+					str = "LAD->CMB";
 					break;
 				case FILTER_ORDER_COMB_FIRST:
-					str = "LFP->LAD";
+					str = "CMB->LAD";
 					break;
 				default: break;
 			}
@@ -486,6 +490,10 @@ void updateOledBottomLeft(){
 	switch( currentMenu ){
 		case MENU_TOP:
 			str = "FILTER  ";
+			break;
+		case MENU_VENOM:
+			str.Clear();
+			str.AppendInt( currentVenomIncrement );
 			break;
 		case MENU_FILTER_ORDER:
 			str = "ORDER   ";
