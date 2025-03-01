@@ -14,7 +14,8 @@ using namespace daisysp;
 enum menus { MENU_TOP, MENU_VENOM, MENU_FILTER_ORDER, MENU_COMP, MENUS_COUNT };
 enum menuModes { MENU_MODE_SELECT, MENU_MODE_EDIT, MENU_MODES_COUNT };
 enum filterOrders { FILTER_ORDER_LADDER_FIRST, FILTER_ORDER_COMB_FIRST, FILTER_ORDERS_COUNT };
-enum compSettings { COMP_ATTACK, COMP_MAKEUP, COMP_RATIO, COMP_RELEASE, COMP_THRESHOLD, COMP_SETTINGS_COUNT };
+enum compSettings { COMP_POSITION, COMP_ATTACK, COMP_MAKEUP, COMP_RATIO, COMP_RELEASE, COMP_THRESHOLD, COMP_SETTINGS_COUNT };
+enum compPositionSettings { CPOS_OFF, CPOS_BEFORE, CPOS_MIDDLE, CPOS_AFTER };
 enum curves { CURVE_LINEAR, CURVE_EXPONENTIAL, CURVE_LOGARITHMIC, CURVE_CUBE, CURVES_COUNT };
 
 DaisyPatch hw;
@@ -39,12 +40,13 @@ float combBuffer[ COMB_BUFFER_SIZE ],
 	compReleaseMax = 10.f,
 	compThresholdMax = -80.f,
 	venomMin = 0.f,
-	venomMax = 80.f;
+	venomMax = 8.f;
 
 int currentMenu = MENU_TOP,
 	currentTopMenuSetting = MENU_VENOM,
-	currentCompSetting = COMP_ATTACK,
 	currentFilterOrder = FILTER_ORDER_LADDER_FIRST,
+	currentCompSetting = COMP_POSITION,
+	currentCompPosition = CPOS_OFF,
 	currentCompAttackIncrement = 1,
 	currentCompMakeupIncrement = 1,
 	currentCompRatioIncrement = 1,
@@ -135,6 +137,10 @@ void updateCurrentCompSettingValue(){
 }
 void handleCompSubMenuEncoderUp(){
 	switch( currentCompSetting ){
+		case COMP_POSITION: 
+			currentCompPosition++;
+			if( currentCompPosition >= COMP_SETTINGS_COUNT) currentCompPosition = COMP_SETTINGS_COUNT - 1;
+			break;
 		case COMP_ATTACK:
 			currentCompAttackIncrement++;
 			if( currentCompAttackIncrement > MAX_INCREMENT ) currentCompAttackIncrement = MAX_INCREMENT;
@@ -161,6 +167,9 @@ void handleCompSubMenuEncoderUp(){
 }
 void handleCompSubMenuEncoderDown(){
 	switch( currentCompSetting ){
+		case COMP_POSITION: 
+			currentCompPosition--;
+			if( currentCompPosition < 0 ) currentCompPosition = 0;
 		case COMP_ATTACK:
 			currentCompAttackIncrement--;
 			if( currentCompAttackIncrement < 1 ) currentCompAttackIncrement = 1;
@@ -280,10 +289,29 @@ void handleEncoder(){
 	if( hw.encoder.RisingEdge() ) encoderClick();
 }
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size){
-	for (size_t i = 0; i < size; i++){
-		out[0][i] = currentFilterOrder == FILTER_ORDER_COMB_FIRST?
-			comp.Process( ladder.Process( comb.Process( SoftClip( in[0][i] * ( 1.f + currentVenomValue ) ) ) ) ) : 
-			comb.Process( comp.Process( ladder.Process( SoftClip( in[0][i] * ( 1.f + currentVenomValue ) ) ) ) );
+	for (size_t i = 0; i < size; i++){		
+		float sig = SoftClip( in[0][i] * ( 1.f + currentVenomValue ) );
+		switch( currentCompPosition ){
+			case CPOS_OFF:
+				out[0][i] = FILTER_ORDER_COMB_FIRST? ladder.Process( comb.Process( sig ) ) : 
+					comb.Process( ladder.Process( sig ) );
+				break;
+			case CPOS_BEFORE:
+				out[0][i] = FILTER_ORDER_COMB_FIRST? ladder.Process( comb.Process( comp.Process( sig ) ) ) : 
+					comb.Process( ladder.Process( comp.Process( sig ) ) );
+				break;
+			case CPOS_MIDDLE:
+				out[0][i] = FILTER_ORDER_COMB_FIRST? ladder.Process( comp.Process( comb.Process( sig ) ) ) : 
+					comb.Process( comp.Process( ladder.Process( sig ) ) );
+				break;
+			case CPOS_AFTER:
+				out[0][i] = comp.Process( FILTER_ORDER_COMB_FIRST? ladder.Process( comb.Process( sig ) ) : 
+					comb.Process( ladder.Process( sig ) ) );
+				break;
+			default: 
+				out[0][i] = in[0][i];
+				break;
+		}
 		out[1][i] = 0.f;
 		out[2][i] = 0.f;
 		out[3][i] = 0.f;
@@ -303,8 +331,8 @@ void initializeComp(){
 }
 void initializeKnobs(){
 	growlKnob.Init( hw.controls[0], 20.f, 40000.f, Parameter::LOGARITHMIC );
-	howlKnob.Init( hw.controls[2], 0.f, 6000.f, Parameter::LOGARITHMIC );
-	resKnob.Init( hw.controls[1], 0.f, 0.9f, Parameter::LINEAR );
+	howlKnob.Init( hw.controls[2], 200.f, 4000.f, Parameter::LOGARITHMIC );
+	resKnob.Init( hw.controls[1], 0.f, 0.99f, Parameter::LINEAR );
 	fdbkKnob.Init( hw.controls[3], 0.f, 0.99f, Parameter::EXPONENTIAL );
 }
 void updateOledTopLeft(){
@@ -319,6 +347,9 @@ void updateOledTopLeft(){
 		case MENU_COMP:
 			if( isCompSubmenu ){
 				switch( currentCompSetting ){
+					case COMP_POSITION:
+						str = "COMP POS";
+						break;
 					case COMP_ATTACK:
 						str = "ATTACK   ";
 						break;
@@ -345,7 +376,6 @@ void updateOledTopLeft(){
 			str = "        ";
 			break;
 	}
-
 	hw.display.SetCursor( 0, 0 );
 	hw.display.WriteString( str, Font_7x10, true );
 }
@@ -356,7 +386,7 @@ void updateOledTopRight(){
 			str = "   MENU:";
 			break;
 		case MENU_VENOM:
-			str = " 0-8.0";
+			str = "     0-8";
 			break;
 		case MENU_COMP:
 			if( isCompSubmenu ){				
@@ -411,15 +441,15 @@ void updateOledBottomRight(){
 		case MENU_VENOM:
 			str.Clear();
 			str.Append( "   " );
-			str.AppendFloat(currentVenomValue, 2, false, true );
+			str.AppendFloat( currentVenomValue );
 			break;
 		case MENU_FILTER_ORDER:
 			switch( currentFilterOrder ){
 				case FILTER_ORDER_LADDER_FIRST:
-					str = "LAD->LPF";
+					str = "LAD->CMB";
 					break;
 				case FILTER_ORDER_COMB_FIRST:
-					str = "LFP->LAD";
+					str = "CMB->LAD";
 					break;
 				default: break;
 			}
@@ -427,6 +457,25 @@ void updateOledBottomRight(){
 		case MENU_COMP:
 			if( isCompSubmenu ){
 				switch( currentCompSetting ){
+					case COMP_POSITION:
+						switch( currentCompPosition ){
+							case CPOS_OFF:
+								str = "     OFF";
+								break;
+							case CPOS_BEFORE:
+								str = "  BEFORE";
+								break;
+							case CPOS_MIDDLE:
+								str = "  MIDDLE";
+								break;
+							case CPOS_AFTER:
+								str = "   AFTER";
+								break;
+							default:
+								str = "        ";
+								break;
+						}
+						break;
 					case COMP_ATTACK:
 						str.Clear();
 						str.AppendFloat( comp.GetAttack() );
@@ -453,6 +502,9 @@ void updateOledBottomRight(){
 				}
 			} else {
 				switch( currentCompSetting ){
+					case COMP_POSITION:
+						str = "POSITION";
+						break;
 					case COMP_ATTACK:
 						str = "  ATTACK";
 						break;
@@ -486,6 +538,10 @@ void updateOledBottomLeft(){
 	switch( currentMenu ){
 		case MENU_TOP:
 			str = "FILTER  ";
+			break;
+		case MENU_VENOM:
+			str.Clear();
+			str.AppendInt( currentVenomIncrement );
 			break;
 		case MENU_FILTER_ORDER:
 			str = "ORDER   ";
